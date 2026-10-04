@@ -2,8 +2,12 @@ name: Rise Upon Deen Free Push Scheduler
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # Five-minute cadence, offset away from the top of the hour.
+    - cron: '2/5 * * * *'
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 concurrency:
   group: rise-upon-deen-push-scheduler
@@ -20,6 +24,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: push-scheduler/package.json
       - name: Install scheduler dependencies
         working-directory: push-scheduler
         run: npm install --omit=dev
