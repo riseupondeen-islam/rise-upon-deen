@@ -13923,6 +13923,7 @@ async function trashAdminView(){
 function rudNotificationAdminSources(){
   const verified=(adminContent||[]).filter(i=>i?.published===true&&["dua","hadith","reminder"].includes(i.type));
   return [
+    {value:"announcement:test",label:"Test Notification",category:"announcement",title:"Rise Upon Deen Test",message:"Your notification connection is working.",route:"#home"},
     {value:"journey:quran",label:"Qur'an Journey",category:"quran",title:"Qur'an Reminder",message:"Return to your Qur'an journey.",route:"#quran"},
     {value:"journey:continue-quran",label:"Continue Qur'an",category:"continueQuran",title:"Continue Qur'an",message:"Continue from your last-read Ayah.",route:"#quran"},
     {value:"journey:friday-kahf",label:"Friday · Surah Al-Kahf",category:"friday",title:"Friday Reminder",message:"Open Surah Al-Kahf.",route:"#quran/18/1"},
@@ -13936,7 +13937,7 @@ function notificationAdminView(){
   $('#adminMain').innerHTML=`${adminHeader('Send Notification','Send lightweight FCM Web Push through the free Firestore queue. No paid notification server is required.',false)}
   <section class="admin-panel">
     <div class="rud-push-admin-grid">
-      <div class="field wide"><label>Delivery</label><div class="rud-push-config-state" style="margin:0">Free scheduler queue · GitHub Actions checks every 5 minutes · no paid Firebase Functions.</div></div>
+      <div class="field wide"><label>Delivery</label><div class="rud-push-config-state" style="margin:0">Free scheduler queue · GitHub Actions checks every 5 minutes · no paid Firebase Functions. For testing, use the Test Notification source.</div></div>
       <div class="field wide"><label>Verified source / action</label><select class="select" id="pnSource">${sources.map(s=>`<option value="${esc(s.value)}">${esc(s.label)}</option>`).join("")}</select></div>
       <div class="field"><label>Category</label><select class="select" id="pnCategory" disabled><option>General</option></select></div>
       <div class="field"><label>Audience</label><select class="select" id="pnAudience"><option value="all">All eligible subscribers</option><option value="app">Installed PWA users</option><option value="browser">Browser users</option><option value="single">Single visitor</option></select></div>
@@ -13947,7 +13948,7 @@ function notificationAdminView(){
       <div class="field wide"><label>Message</label><textarea class="textarea" id="pnMessage" maxlength="280" readonly></textarea></div>
     </div>
     <div class="rud-push-preview"><small>RISE UPON DEEN V2</small><h3 id="pnPreviewTitle">Notification preview</h3><p id="pnPreviewMessage">Choose a verified source.</p></div>
-    <div class="rud-push-config-state" id="pnConfigState">Messages are queued securely in Firestore. The free GitHub Actions scheduler sends them through FCM on its next run.</div>
+    <div class="rud-push-config-state" id="pnConfigState">Messages are queued securely in Firestore. The free GitHub Actions scheduler processes the queue on its next run. Delivery also respects each visitor’s enabled notification categories.</div>
     <div class="form-actions"><button class="premium-btn primary" id="pnSend" type="button">Send Notification</button><button class="premium-btn" id="pnSchedule" type="button">Schedule Notification</button></div>
   </section>`;
   const byValue=new Map(sources.map(x=>[x.value,x]));
@@ -13967,7 +13968,7 @@ function notificationAdminView(){
   $('#pnSend')?.addEventListener('click',async e=>{
     if(!firebaseReady||!auth?.currentUser)return toast('Secure admin session is unavailable.','error');
     const item=byValue.get(source.value);if(!item)return toast('Choose a notification source.','error');
-    const payload={sourceKind:item.value.split(':')[0],sourceId:item.sourceId||"",journey:item.value.startsWith('journey:')?item.value.split(':')[1]:"",category:item.category,title:title.value.trim(),message:message.value.trim(),route:routeInput.value.trim()||"#home",audience:audience.value,targetVisitorId:recipient.value.trim(),dedupeId:`${item.value}:${audience.value}:${recipient.value.trim()}:${Date.now()}`};
+    const payload={sourceKind:item.value.split(':')[0],sourceId:item.sourceId||"",journey:item.value.startsWith('journey:')?item.value.split(':')[1]:"",category:item.category,title:title.value.trim(),message:message.value.trim(),route:routeInput.value.trim()||"#home",audience:audience.value,targetVisitorId:recipient.value.trim(),dedupeId:`${item.value}:${audience.value}:${recipient.value.trim()}:${Date.now()}`,forceTest:item.value==="announcement:test"};
     if(item.manual&&(!payload.title||!payload.message))return toast('Title and message are required.','error');
     if(payload.audience==='single'&&!payload.targetVisitorId)return toast('Enter a visitor ID for a single-recipient notification.','error');
     busy(e.currentTarget,true,'Queueing…');
@@ -13981,7 +13982,7 @@ function notificationAdminView(){
     if(item.manual&&(!title.value.trim()||!message.value.trim()))return toast('Title and message are required.','error');
     if(!scheduleAt.value)return toast('Choose a future date and time.','error');
     const when=new Date(scheduleAt.value);if(!Number.isFinite(when.getTime())||when.getTime()<=Date.now())return toast('Choose a future date and time.','error');
-    const payload={sourceKind:item.value.split(':')[0],sourceId:item.sourceId||"",journey:item.value.startsWith('journey:')?item.value.split(':')[1]:"",category:item.category,title:title.value.trim(),message:message.value.trim(),route:routeInput.value.trim()||"#home",audience:audience.value,targetVisitorId:recipient.value.trim(),scheduledAt:when.toISOString(),dedupeId:`schedule:${item.value}:${audience.value}:${recipient.value.trim()}:${when.toISOString()}`};
+    const payload={sourceKind:item.value.split(':')[0],sourceId:item.sourceId||"",journey:item.value.startsWith('journey:')?item.value.split(':')[1]:"",category:item.category,title:title.value.trim(),message:message.value.trim(),route:routeInput.value.trim()||"#home",audience:audience.value,targetVisitorId:recipient.value.trim(),scheduledAt:when.toISOString(),dedupeId:`schedule:${item.value}:${audience.value}:${recipient.value.trim()}:${when.toISOString()}`,forceTest:item.value==="announcement:test"};
     if(payload.audience==='single'&&!payload.targetVisitorId)return toast('Enter a visitor ID for a single-recipient notification.','error');
     busy(e.currentTarget,true,'Scheduling…');
     try{await queueJob(payload);toast('Notification scheduled in the free queue.');scheduleAt.value='';}
@@ -16327,7 +16328,7 @@ async function initPrayer(){
     const t={Fajr:cached.timings.fajr,Sunrise:cached.timings.sunrise||'',Dhuhr:cached.timings.dhuhr,Asr:cached.timings.asr,Maghrib:cached.timings.maghrib,Isha:cached.timings.isha};
     renderPrayerTimes(t,cached.timeZone,prayerDateStamp(cached.timeZone),m,cached.lat,cached.lng,'Today · saved schedule');
     if(Number.isFinite(cached.lat)&&Number.isFinite(cached.lng)){
-      lastCoords={lat:cached.lat,lng:cached.lng};qiblaBearing=qibla(cached.lat,cached.lng);rudFindNearbyMasjids(cached.lat,cached.lng);
+      lastCoords={lat:cached.lat,lng:cached.lng};rudMasjidLastCoordsAt=Date.now();qiblaBearing=qibla(cached.lat,cached.lng);rudFindNearbyMasjids(cached.lat,cached.lng);
       const deg=document.getElementById('rudQiblaDegrees'),text=document.getElementById('rudQiblaText'),arrow=document.getElementById('rudQiblaArrow');if(deg)deg.textContent=`${qiblaBearing.toFixed(1)}° from true north`;if(text)text.textContent='Enable the live compass to align your phone';if(arrow)arrow.style.transform=`rotate(${qiblaBearing}deg)`;
     }
     state.textContent='Today’s saved prayer times are ready · checking location…';
@@ -16338,7 +16339,7 @@ async function initPrayer(){
     try{
       const pos=await getLocation();if(!document.getElementById('rudPrayerState'))return;
       const lat=Number(pos.coords.latitude),lng=Number(pos.coords.longitude),acc=Number(pos.coords.accuracy||0);if(!Number.isFinite(lat)||!Number.isFinite(lng))throw new Error('Precise coordinates were not available.');
-      const nextCoords={lat,lng};lastCoords=nextCoords;qiblaBearing=qibla(lat,lng);rudFindNearbyMasjids(lat,lng);liveState.textContent=`Location ready${acc?` · accuracy about ${Math.round(acc)} m`:''}`;
+      const nextCoords={lat,lng};lastCoords=nextCoords;rudMasjidLastCoordsAt=Date.now();qiblaBearing=qibla(lat,lng);rudFindNearbyMasjids(lat,lng);liveState.textContent=`Location ready${acc?` · accuracy about ${Math.round(acc)} m`:''}`;
       const deg=document.getElementById('rudQiblaDegrees'),text=document.getElementById('rudQiblaText'),arrow=document.getElementById('rudQiblaArrow');if(deg)deg.textContent=`${qiblaBearing.toFixed(1)}° from true north`;if(text)text.textContent='Enable the live compass to align your phone';if(arrow)arrow.style.transform=`rotate(${qiblaBearing}deg)`;
       const expected=regionalMethod(cached?.timeZone||Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'),samePlace=cached&&Number.isFinite(cached.lat)&&Number.isFinite(cached.lng)&&distanceKm({lat:cached.lat,lng:cached.lng},nextCoords)<5,sameMethod=cached&&Number(cached.method??expected.id)===Number(expected.id)&&Number(cached.school??expected.school)===Number(expected.school);
       if(!cached||!samePlace||!sameMethod)await loadPrayerTimes(lat,lng);else liveState.textContent=`Location ready${acc?` · accuracy about ${Math.round(acc)} m`:''} · using today’s saved prayer times`;
@@ -16377,49 +16378,138 @@ function prayerApiDate(stamp){
   const match=String(stamp||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return match?`${match[3]}-${match[2]}-${match[1]}`:String(stamp||'');
 }
-const RUD_MASJID_CACHE_KEY="rud_nearby_masjids_v1";
+const RUD_MASJID_CACHE_KEY="rud_nearby_masjids_v2";
 const RUD_MASJID_CACHE_TTL=30*60*1000;
 let rudMasjidRequest=null;
+let rudMasjidLastCoordsAt=0;
 function rudMasjidCacheKey(lat,lng){return `${Math.round(Number(lat)*1000)}:${Math.round(Number(lng)*1000)}`}
-function rudMasjidName(tags){const t=tags||{};return String(t.name||t["name:en"]||t["name:ar"]||"Nearby Masjid").trim()||"Nearby Masjid"}
+function rudMasjidName(tags){
+  const t=tags||{};
+  return String(t.name||t["name:en"]||t["name:ar"]||t["name:ur"]||t["official_name"]||"Nearby Masjid").trim()||"Nearby Masjid";
+}
 function rudMasjidMapUrl(lat,lng){return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}&travelmode=walking`}
 function rudMasjidSearchUrl(lat,lng){return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`mosque near ${lat},${lng}`)}`}
 function rudMasjidRender(items,status="",coords=null){
   const host=document.getElementById("rudNearbyMasjidResults");if(!host)return;
   if(!items.length){
-    const fallback=coords?`<div class="rud-nearby-masjid-status">${esc(status||"No nearby masjids were found in the mapped area.")}<div style="margin-top:10px"><a class="rud-mini-btn" href="${esc(rudMasjidSearchUrl(coords.lat,coords.lng))}" target="_blank" rel="noopener noreferrer">Search Nearby Masjids in Maps</a></div></div>`:`<div class="rud-nearby-masjid-status">${esc(status||"No nearby masjids were found.")}</div>`;
-    host.innerHTML=fallback;return;
+    const text=esc(status||"No nearby masjids were found in the mapped area.");
+    host.innerHTML=`<div class="rud-nearby-masjid-status">${text}${coords?`<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><a class="rud-mini-btn" href="${esc(rudMasjidSearchUrl(coords.lat,coords.lng))}" target="_blank" rel="noopener noreferrer">Open Nearby Masjids in Maps</a><button type="button" class="rud-mini-btn" id="rudNearbyMasjidRetry">Try Again</button></div>`:""}</div>`;
+    document.getElementById("rudNearbyMasjidRetry")?.addEventListener("click",()=>rudFindNearbyMasjids(coords.lat,coords.lng,{force:true}));
+    return;
   }
-  host.innerHTML=`<div class="rud-nearby-masjid-list">${items.slice(0,6).map(x=>{const d=x.distance<1?`${Math.round(x.distance*1000)} m`:`${x.distance.toFixed(1)} km`;return `<div class="rud-nearby-masjid-item"><div><strong>${esc(x.name)}</strong><small>${d} away${x.address?` · ${esc(x.address)}`:""}</small></div><a href="${esc(rudMasjidMapUrl(x.lat,x.lng))}" target="_blank" rel="noopener noreferrer">Directions</a></div>`}).join("")}<div style="margin-top:10px"><a class="rud-mini-btn" href="${esc(rudMasjidSearchUrl(items[0].lat,items[0].lng))}" target="_blank" rel="noopener noreferrer">More in Maps</a></div></div>`;
+  host.innerHTML=`<div class="rud-nearby-masjid-list">${items.slice(0,6).map(x=>{
+    const d=x.distance<1?`${Math.round(x.distance*1000)} m`:`${x.distance.toFixed(1)} km`;
+    return `<div class="rud-nearby-masjid-item"><div><strong>${esc(x.name)}</strong><small>${d} away${x.address?` · ${esc(x.address)}`:""}</small></div><a href="${esc(rudMasjidMapUrl(x.lat,x.lng))}" target="_blank" rel="noopener noreferrer">Directions</a></div>`;
+  }).join("")}<div style="margin-top:10px"><a class="rud-mini-btn" href="${esc(rudMasjidSearchUrl(items[0].lat,items[0].lng))}" target="_blank" rel="noopener noreferrer">More in Maps</a></div></div>`;
 }
 async function rudMasjidFetch(endpoint,q,controller){
   const attempts=[
-    ()=>fetch(endpoint,{method:"POST",headers:{"Content-Type":"text/plain;charset=UTF-8"},body:q,signal:controller.signal,cache:"no-store"}),
-    ()=>fetch(`${endpoint}?data=${encodeURIComponent(q)}`,{method:"GET",signal:controller.signal,cache:"no-store"})
+    ()=>fetch(`${endpoint}?data=${encodeURIComponent(q)}`,{method:"GET",headers:{accept:"application/json"},signal:controller.signal,cache:"no-store"}),
+    ()=>fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8",accept:"application/json"},body:`data=${encodeURIComponent(q)}`,signal:controller.signal,cache:"no-store"})
   ];
   let last;
-  for(const attempt of attempts){try{const r=await attempt();if(r.ok)return r;last=new Error(`HTTP ${r.status}`)}catch(e){last=e}}
+  for(const attempt of attempts){
+    try{
+      const r=await attempt();
+      if(!r.ok){last=new Error(`HTTP ${r.status}`);continue}
+      const text=await r.text();
+      try{return JSON.parse(text)}catch{last=new Error("Nearby masjid service returned invalid data")}
+    }catch(e){last=e}
+  }
   throw last||new Error("Nearby masjid service unavailable");
 }
 async function rudFindNearbyMasjids(lat,lng,{force=false}={}){
-  lat=Number(lat);lng=Number(lng);if(!Number.isFinite(lat)||!Number.isFinite(lng))return false;
-  const host=document.getElementById("rudNearbyMasjidResults"),btn=document.getElementById("rudNearbyMasjidBtn");if(!host)return false;
+  lat=Number(lat);lng=Number(lng);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng))return false;
+  const host=document.getElementById("rudNearbyMasjidResults"),btn=document.getElementById("rudNearbyMasjidBtn");
+  if(!host)return false;
   const key=rudMasjidCacheKey(lat,lng);
-  if(!force){try{const cached=JSON.parse(localStorage.getItem(RUD_MASJID_CACHE_KEY)||"null");if(cached&&cached.key===key&&Date.now()-Number(cached.at||0)<RUD_MASJID_CACHE_TTL&&Array.isArray(cached.items)){rudMasjidRender(cached.items,"",{lat,lng});return true}}catch{}}
+  if(!force){
+    try{
+      const cached=JSON.parse(localStorage.getItem(RUD_MASJID_CACHE_KEY)||"null");
+      if(cached&&cached.key===key&&Date.now()-Number(cached.at||0)<RUD_MASJID_CACHE_TTL&&Array.isArray(cached.items)){
+        rudMasjidRender(cached.items,"",{lat,lng});return true;
+      }
+    }catch{}
+  }
   if(rudMasjidRequest){host.textContent="Finding nearby masjids…";return rudMasjidRequest}
-  if(btn)busy(btn,true,"Finding…");host.textContent="Finding nearby masjids…";
-  rudMasjidRequest=(async()=>{try{
-    const q=`[out:json][timeout:10];(nwr["amenity"="place_of_worship"]["religion"~"muslim|islam",i](around:8000,${lat},${lng});nwr["amenity"="place_of_worship"]["name"~"masjid|mosque|मस्जिद|مسجد",i](around:8000,${lat},${lng});nwr["amenity"="mosque"](around:8000,${lat},${lng});nwr["building"="mosque"](around:8000,${lat},${lng}););out center tags;`;
-    const endpoints=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"];
-    let data=null,lastError=null;
-    for(const endpoint of endpoints){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);try{const response=await rudMasjidFetch(endpoint,q,controller);data=await response.json();break}catch(e){lastError=e}finally{clearTimeout(timer)}}
-    if(!data)throw lastError||new Error("Nearby masjid service unavailable");
-    const seen=new Set(),items=[];
-    for(const el of (data.elements||[])){const tags=el.tags||{},name=rudMasjidName(tags),elLat=Number(el.lat??el.center?.lat),elLng=Number(el.lon??el.center?.lon);if(!Number.isFinite(elLat)||!Number.isFinite(elLng))continue;const key2=`${rudNormalizeContentKey(name)}|${elLat.toFixed(4)}|${elLng.toFixed(4)}`;if(seen.has(key2))continue;seen.add(key2);const distance=distanceKm({lat,lng},{lat:elLat,lng:elLng}),address=[tags["addr:housenumber"],tags["addr:street"],tags["addr:city"]].filter(Boolean).join(" ");items.push({name,lat:elLat,lng:elLng,distance,address})}
-    items.sort((a,b)=>a.distance-b.distance);rudMasjidRender(items,items.length?"":"No nearby masjids were found in OpenStreetMap.",{lat,lng});try{localStorage.setItem(RUD_MASJID_CACHE_KEY,JSON.stringify({key,at:Date.now(),items:items.slice(0,10)}))}catch{}return true;
-  }catch(e){console.warn("Nearby masjid lookup failed",e);rudMasjidRender([],"The live masjid directory is unavailable right now.",{lat,lng});return false}finally{rudMasjidRequest=null;if(btn)busy(btn,false)}})();return rudMasjidRequest;
+  if(btn)busy(btn,true,"Finding…");
+  host.innerHTML=`<div class="rud-nearby-masjid-status">Finding nearby masjids…</div>`;
+  rudMasjidRequest=(async()=>{
+    try{
+      const q=`[out:json][timeout:12];(
+        nwr["amenity"="place_of_worship"]["religion"="muslim"](around:7000,${lat},${lng});
+        nwr["amenity"="place_of_worship"]["religion"~"^muslim$|^islam$",i](around:7000,${lat},${lng});
+        nwr["amenity"="place_of_worship"]["place_of_worship"="mosque"](around:7000,${lat},${lng});
+        nwr["building"="mosque"](around:7000,${lat},${lng});
+        nwr["amenity"="place_of_worship"]["name"~"masjid|mosque|مسجد|मस्जिद",i](around:7000,${lat},${lng});
+      );out center tags qt;`;
+      const endpoints=[
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter"
+      ];
+      let data=null,lastError=null;
+      for(const endpoint of endpoints){
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),14000);
+        try{data=await rudMasjidFetch(endpoint,q,controller);if(data?.elements)break}
+        catch(e){lastError=e}
+        finally{clearTimeout(timer)}
+      }
+      if(!data)throw lastError||new Error("Nearby masjid service unavailable");
+      const seen=new Set(),items=[];
+      for(const el of (Array.isArray(data.elements)?data.elements:[])){
+        const tags=el.tags||{},name=rudMasjidName(tags);
+        const elLat=Number(el.lat??el.center?.lat),elLng=Number(el.lon??el.center?.lon);
+        if(!Number.isFinite(elLat)||!Number.isFinite(elLng))continue;
+        const distance=distanceKm({lat,lng},{lat:elLat,lng:elLng});
+        if(!Number.isFinite(distance)||distance>7.5)continue;
+        const key2=`${rudNormalizeContentKey(name)}|${elLat.toFixed(4)}|${elLng.toFixed(4)}`;
+        if(seen.has(key2))continue;
+        seen.add(key2);
+        const address=[tags["addr:housenumber"],tags["addr:street"],tags["addr:suburb"],tags["addr:city"]].filter(Boolean).join(" ");
+        items.push({name,lat:elLat,lng:elLng,distance,address});
+      }
+      items.sort((a,b)=>a.distance-b.distance);
+      rudMasjidRender(items,items.length?"":"No nearby masjids are mapped in OpenStreetMap yet.",{lat,lng});
+      try{localStorage.setItem(RUD_MASJID_CACHE_KEY,JSON.stringify({key,at:Date.now(),items:items.slice(0,10)}))}catch{}
+      return true;
+    }catch(e){
+      console.warn("Nearby masjid lookup failed",e);
+      rudMasjidRender([],`The live masjid directory could not be reached. You can still search nearby masjids in Maps.`,{lat,lng});
+      return false;
+    }finally{
+      rudMasjidRequest=null;
+      if(btn)busy(btn,false);
+    }
+  })();
+  return rudMasjidRequest;
 }
-function rudBindNearbyMasjid(){const btn=document.getElementById("rudNearbyMasjidBtn");if(!btn||btn.dataset.bound==="1")return;btn.dataset.bound="1";btn.addEventListener("click",async()=>{if(lastCoords)return rudFindNearbyMasjids(lastCoords.lat,lastCoords.lng,{force:true});try{const pos=await getLocation();const lat=Number(pos.coords.latitude),lng=Number(pos.coords.longitude);if(!Number.isFinite(lat)||!Number.isFinite(lng))throw new Error("Location unavailable");lastCoords={lat,lng};qiblaBearing=qibla(lat,lng);return rudFindNearbyMasjids(lat,lng,{force:true})}catch(e){toast("Allow location access first, then try Nearby Masjids again.","error")}})}
+async function rudNearbyMasjidUseLocation({force=true}={}){
+  const now=Date.now();
+  if(lastCoords&&now-rudMasjidLastCoordsAt<10*60*1000)return rudFindNearbyMasjids(lastCoords.lat,lastCoords.lng,{force});
+  try{
+    const pos=await getLocation();
+    const lat=Number(pos.coords.latitude),lng=Number(pos.coords.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng))throw new Error("Location unavailable");
+    lastCoords={lat,lng};rudMasjidLastCoordsAt=Date.now();qiblaBearing=qibla(lat,lng);
+    return rudFindNearbyMasjids(lat,lng,{force});
+  }catch(e){
+    const host=document.getElementById("rudNearbyMasjidResults");
+    if(host)host.innerHTML=`<div class="rud-nearby-masjid-status">Location permission is required to find nearby masjids.<div style="margin-top:12px"><button type="button" class="rud-mini-btn" id="rudNearbyMasjidPermissionRetry">Allow Location & Try Again</button></div></div>`;
+    document.getElementById("rudNearbyMasjidPermissionRetry")?.addEventListener("click",()=>rudNearbyMasjidUseLocation({force:true}),{once:true});
+    toast(e?.code===1?"Allow location access for Rise Upon Deen, then try again.":"Unable to get your location right now. Please try again.","error");
+    return false;
+  }
+}
+function rudBindNearbyMasjid(){
+  const btn=document.getElementById("rudNearbyMasjidBtn");
+  if(!btn||btn.dataset.bound==="1")return;
+  btn.dataset.bound="1";
+  btn.addEventListener("click",()=>rudNearbyMasjidUseLocation({force:true}));
+  window.rudNearbyMasjidUseLocation=rudNearbyMasjidUseLocation;
+  window.rudFindNearbyMasjids=rudFindNearbyMasjids;
+}
 
 function renderPrayerTimes(t,tz,stamp,m,lat,lng,readable=''){
   const required=['Fajr','Dhuhr','Asr','Maghrib','Isha'];if(required.some(name=>!cleanTime(t[name])))throw new Error('Incomplete prayer-time data');

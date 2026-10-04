@@ -134,9 +134,14 @@ async function rudIdbPut(key, value) {
 
 async function rudPushAllowed(data) {
   const prefs = await rudIdbGet('preferences');
-  if (!prefs || prefs.enabled !== true) return false;
-  const category = String(data?.category || 'announcement');
-  if (prefs.categories && Object.prototype.hasOwnProperty.call(prefs.categories, category) && prefs.categories[category] === false) return false;
+  const adminTest = String(data?.adminTest || '') === '1';
+  if (adminTest) {
+    if (!prefs || prefs.enabled !== true) return false;
+  } else {
+    if (!prefs || prefs.enabled !== true) return false;
+    const category = String(data?.category || 'announcement');
+    if (prefs.categories && Object.prototype.hasOwnProperty.call(prefs.categories, category) && prefs.categories[category] === false) return false;
+  }
 
   const dedupeId = String(data?.dedupeId || '').trim();
   if (!dedupeId) return true;
