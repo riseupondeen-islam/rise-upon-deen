@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "push_schedules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "scheduledAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "push_subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "active", "order": "ASCENDING"},
+        {"fieldPath": "enabledCategories", "arrayConfig": "CONTAINS"}
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

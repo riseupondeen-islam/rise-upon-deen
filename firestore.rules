@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn(){ return request.auth != null; }
+    function isAdmin(){ return signedIn() && request.auth.token.email != null && request.auth.token.email == 'riseupondeen@gmail.com'; }
+    function isString(v,max){ return v is string && v.size() <= max; }
+    function validVisitorId(v){ return isString(v,120); }
+
+    match /content/{documentId} {
+      allow read: if isAdmin() || resource.data.published == true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /visitor_sessions/{sessionId} {
+      allow create: if
+        validVisitorId(request.resource.data.visitorId) &&
+        isString(request.resource.data.visitorName,50) &&
+        isString(request.resource.data.sessionId,160) &&
+        request.resource.data.sessionId == sessionId &&
+        request.resource.data.startedAt is timestamp &&
+        request.resource.data.lastSeenAt is timestamp &&
+        request.resource.data.clientLastSeenMs is int && request.resource.data.clientLastSeenMs >= 0 &&
+        request.resource.data.durationSeconds is int && request.resource.data.durationSeconds >= 0 &&
+        isString(request.resource.data.route,180) &&
+        request.resource.data.device in ['mobile','tablet','desktop'];
+
+      allow update: if
+        request.resource.data.sessionId == sessionId &&
+        request.resource.data.sessionId == resource.data.sessionId &&
+        request.resource.data.visitorId == resource.data.visitorId &&
+        validVisitorId(request.resource.data.visitorId) &&
+        isString(request.resource.data.visitorName,50) &&
+        request.resource.data.startedAt is timestamp &&
+        request.resource.data.lastSeenAt is timestamp &&
+        request.resource.data.clientLastSeenMs is int && request.resource.data.clientLastSeenMs >= 0 &&
+        request.resource.data.durationSeconds is int && request.resource.data.durationSeconds >= 0 &&
+        isString(request.resource.data.route,180) &&
+        request.resource.data.device in ['mobile','tablet','desktop'];
+
+      allow read, delete: if isAdmin();
+    }
+
+    match /broadcast_messages/{messageId} {
+      allow read: if isAdmin() || resource.data.active == true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /broadcast_receipts/{receiptId} {
+      allow create, update: if
+        validVisitorId(request.resource.data.visitorId) &&
+        isString(request.resource.data.broadcastId,128) &&
+        request.resource.data.eventType in ['shown','dismissed'];
+      allow read, delete: if isAdmin();
+    }
+
+    match /push_jobs/{jobId} {
+      allow create, read, update, delete: if isAdmin();
+    }
+
+    match /push_subscriptions/{visitorId} {
+      allow read: if isAdmin();
+      allow create, update: if
+        request.resource.data.visitorId == visitorId &&
+        validVisitorId(request.resource.data.visitorId) &&
+        request.resource.data.active is bool &&
+        (request.resource.data.fcmToken == null || isString(request.resource.data.fcmToken,4096)) &&
+        isString(request.resource.data.platform,30) &&
+        (request.resource.data.schedule == null ||
+          (request.resource.data.schedule is map &&
+           request.resource.data.schedule.categories is map &&
+           request.resource.data.schedule.reminderTime is string &&
+           request.resource.data.schedule.timeZone is string)) &&
+        request.resource.data.firstEnabledAt is int && request.resource.data.firstEnabledAt >= 0 &&
+        request.resource.data.updatedAt is timestamp;
+      allow delete: if isAdmin();
+    }
+
+    match /trash/{documentId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    /* No Version Management / Version Control / Testers / Version Audit rules. */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

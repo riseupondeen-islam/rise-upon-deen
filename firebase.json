@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", ".github/**", "push-scheduler/**", "README-FREE.md"],
+    "headers": [
+      {"source":"/sw.js","headers":[{"key":"Cache-Control","value":"no-cache, no-store, must-revalidate"},{"key":"Service-Worker-Allowed","value":"/"}]},
+      {"source":"/index.html","headers":[{"key":"Cache-Control","value":"no-cache, must-revalidate"}]},
+      {"source":"/manifest.webmanifest","headers":[{"key":"Cache-Control","value":"public, max-age=3600"}]},
+      {"source":"/icon-*.png","headers":[{"key":"Cache-Control","value":"public, max-age=604800, immutable"}]},
+      {"source":"/apple-touch-icon.png","headers":[{"key":"Cache-Control","value":"public, max-age=604800, immutable"}]}
+    ],
+    "rewrites":[{"source":"**","destination":"/index.html"}]
+  },
+  "firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"}
+}
