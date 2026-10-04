@@ -83,25 +83,52 @@ async function sendPrayer(doc,record,key,date){
 async function sendGenericJob(jobRef,job){
   const now=Date.now();
   if(job.status!=='queued')return {skipped:true};
-  if(job.scheduledAt){const t=Date.parse(job.scheduledAt);if(Number.isFinite(t)&&t>now)return {skipped:true};}
-  const category=String(job.category||'announcement'),title=String(job.title||'Rise Upon Deen').slice(0,120),message=String(job.message||'').slice(0,280),route=String(job.route||'#home').startsWith('#')?String(job.route||'#home'):'#home';
-  let snap;
-  if(job.audience==='single'&&job.targetVisitorId){snap=await db.collection(PUSH_COLLECTION).where('active','==',true).where('visitorId','==',String(job.targetVisitorId)).get();}
-  else snap=await db.collection(PUSH_COLLECTION).where('active','==',true).get();
-  let sent=0;
+  if(job.scheduledAt){
+    const t=Date.parse(job.scheduledAt);
+    if(Number.isFinite(t)&&t>now)return {skipped:true};
+  }
+  const category=String(job.category||'announcement');
+  const title=String(job.title||'Rise Upon Deen').slice(0,120);
+  const message=String(job.message||'').slice(0,280);
+  const route=String(job.route||'#home').startsWith('#')?String(job.route||'#home'):'#home';
+  const forceTest=job.forceTest===true;
+  let snap=await db.collection(PUSH_COLLECTION).where('active','==',true).get();
+  let sent=0,eligible=0;
   for(const doc of snap.docs){
-    const r=doc.data()||{},cats=r.schedule?.categories||{};
-    if(cats[category]===false||!r.fcmToken)continue;
+    const r=doc.data()||{};
+    if(!r.fcmToken)continue;
+    if(job.audience==='single'&&String(r.visitorId||doc.id)!==String(job.targetVisitorId||''))continue;
+    const cats=r.schedule?.categories||{};
+    if(!forceTest&&cats[category]===false)continue;
     const installed=['android-pwa','ios-home-screen','installed-pwa'].includes(String(r.platform||r.schedule?.platform||''));
     if(job.audience==='app'&&!installed)continue;
     if(job.audience==='browser'&&installed)continue;
-    try{await messaging.send({token:r.fcmToken,data:{title,message,body:message,category,route,dedupeId:String(job.dedupeId||jobRef.id)},webpush:{headers:{TTL:'900',Urgency:'normal'}}});sent++;}
-    catch(error){if(invalidToken(error?.code))await disableToken(doc.ref);}
+    eligible++;
+    try{
+      await messaging.send({
+        token:r.fcmToken,
+        data:{title,message,body:message,category,route,dedupeId:String(job.dedupeId||jobRef.id),adminTest:forceTest?'1':'0'},
+        webpush:{headers:{TTL:'900',Urgency:forceTest?'high':'normal'}}
+      });
+      sent++;
+    }catch(error){
+      if(invalidToken(error?.code))await disableToken(doc.ref);
+      else console.warn(`Generic push failed for ${doc.id}`,error?.message||error);
+    }
   }
-  await jobRef.set({status:'sent',sent,processedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
-  return {sent};
+  if(sent>0){
+    await jobRef.set({status:'sent',sent,eligible,processedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),lastError:null},{merge:true});
+    return {sent,eligible};
+  }
+  await jobRef.set({
+    status:'queued',
+    eligible,
+    attemptedAt:FieldValue.serverTimestamp(),
+    updatedAt:FieldValue.serverTimestamp(),
+    lastError:eligible===0?'No active matching FCM subscription was available yet.':'FCM delivery failed for all matching subscriptions; retrying on the next run.'
+  },{merge:true});
+  return {sent:0,eligible,retry:true};
 }
-
 async function processJobs(){
   const snap=await db.collection(JOB_COLLECTION).where('status','==','queued').limit(100).get();
   let sent=0,processed=0;
@@ -123,7 +150,7 @@ async function processPrayerNotifications(){
       for(const key of PRAYER_KEYS){const t=cleanTime(prayers.timings[key]);if(!t)continue;const delta=minuteDistance(today.hour,today.minute,t);
         // GitHub's free scheduler has a minimum 5-minute cadence. A 10-minute catch-up
         // window prevents a normal scheduled-run delay from losing a prayer alert.
-        if(delta<0||delta>10)continue;
+        if(delta<0||delta>30)continue;
         try{if(await sendPrayer(doc,record,key,today.date))sent++;}catch(e){console.warn(`Prayer send failed ${doc.id}/${key}`,e?.message||e);}
       }
     }catch(e){console.warn(`Subscriber ${doc.id} failed`,e?.message||e);}
